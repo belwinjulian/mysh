@@ -292,26 +292,10 @@ int redirection(char **args) {
             close(fd);
 
 
-            //delete < > and filename
-            if (strcmp(args[i], "<") == 0) { 
-            i++; // Skip the filename
-            while (args[i + 1] != NULL) {
-                args[i] = args[i + 1];
-                i++;
-            }
-            args[i] = NULL;  // New null terminator
-
-            // Additionally remove the redirection symbol itself
-            i--;         // Decrement to go back to the position of the redirection symbol
-            while (args[i + 1] != NULL) {
-                args[i] = args[i + 1];
-                i++;
-            }
-            args[i] = NULL; // New null terminator 
+       
+            
         }
-            args[i] = NULL;  
-        
-        } else if (strcmp(args[i], ">") == 0) {
+        else if (strcmp(args[i], ">") == 0) {
             // Output redirection
             if (args[i + 1] == NULL) {
                 perror("mysh: redirection error: no output file\n");
@@ -323,32 +307,39 @@ int redirection(char **args) {
                 return 1;
             }
             dup2(fd, STDOUT_FILENO);
-            close(fd);
-
-           
-            //delete < > and filename
-            if (strcmp(args[i], "<") == 0) { 
-            i++; // Skip the filename
-            while (args[i + 1] != NULL) {
-                args[i] = args[i + 1];
-                i++;
-            }
-            args[i] = NULL;  // New null terminator
-
-            // Additionally remove the redirection symbol itself
-            i--;         // Decrement to go back to the position of the redirection symbol
-            while (args[i + 1] != NULL) {
-                args[i] = args[i + 1];
-                i++;
-            }
-            args[i] = NULL; // New null terminator 
-        }
-            args[i] = NULL;  
-        
-
+            close(fd); 
         }
         i++;
     }
+
+    //remove redirection symbols and filename after redirection is complete.
+    i = 0;
+    int j = i;
+    while(args[i] != NULL)
+    {
+        if((strcmp(args[i], ">") == 0) || (strcmp(args[i], "<") == 0))
+        {
+            j++; // Skip the filename
+            while (args[j + 1] != NULL) {
+                args[j] = args[j + 1];
+                j++;
+            }
+            args[j] = NULL;  // New null terminator
+
+            // Additionally remove the redirection symbol itself
+            j=i;         // Decrement to go back to the position of the redirection symbol
+            while (args[j + 1] != NULL) {
+                args[j] = args[j + 1];
+                j++;
+            }
+            args[j] = NULL; // New null terminator 
+            i--;
+        }
+        i++;
+    }
+
+
+
     return 0; // Success
 }
 
