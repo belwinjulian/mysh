@@ -126,15 +126,16 @@ void tokenize(char *line, int mode) {
    
     int i = 0;
      if (split_line[0] != NULL) {
-    redirection_and_piping(split_line);
 
 
         for (i = 0; split_line[i] != NULL; i++) {
             if (strcmp(split_line[i], "|") == 0) {
+                redirection_and_piping(split_line);
                 return;//theres a pipe, so it was handled already
             }
     
         }
+        redirection_and_piping(split_line);
         command(split_line, mode);//there was only a redirection, so we need to still run command
 
 
@@ -318,7 +319,7 @@ void redirection_and_piping(char **args) {
 
     close(pipefd[0]);
     close(pipefd[1]);
-    
+
     wait(NULL);
     wait(NULL);
 }
