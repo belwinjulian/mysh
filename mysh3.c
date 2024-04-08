@@ -124,10 +124,23 @@ void tokenize(char *line, int mode) {
     split_line[num] = NULL; // Null-terminate the array (important for exec() functions)
 
    
-    
+    int i = 0;
      if (split_line[0] != NULL) {
-       
-    command(split_line, mode);
+    redirection_and_piping(split_line);
+
+
+        for (i = 0; split_line[i] != NULL; i++) {
+            if (strcmp(split_line[i], "|") == 0) {
+                return;//theres a pipe, so it was handled already
+            }
+    
+        }
+        command(split_line, mode);//there was only a redirection, so we need to still run command
+
+
+    }
+    
+            
 }
 
 
@@ -136,7 +149,7 @@ void tokenize(char *line, int mode) {
     //   command(split_line, mode);
     //}
 
-}
+
 
 //cd    pwd     exit   which
 int command(char **args, int mode) {
@@ -146,7 +159,7 @@ int command(char **args, int mode) {
     //i changed this to be in the process line function 
     
     //handle redirection, and piping
-    redirection_and_piping(args);
+    
 
     if (strcmp(args[0], "cd") == 0) {
         if (args[1] == NULL) {
@@ -264,7 +277,7 @@ void redirection_and_piping(char **args) {
     }
 
 
-     // Create a single pipe
+         // Create a single pipe
     int pipefd[2];
     if (pipe(pipefd) < 0) {
         perror("pipe");
@@ -303,6 +316,11 @@ void redirection_and_piping(char **args) {
         exit(EXIT_FAILURE);
     }
 
+    close(pipefd[0]);
+    close(pipefd[1]);
+    
+    wait(NULL);
+    wait(NULL);
 }
 
 
@@ -312,7 +330,7 @@ int redirection(char **args) {
     while (args[i] != NULL) {
         if (strcmp(args[i], "<") == 0) {
             // Input redirection
-            if (args[i + 1] == NULL) {
+            if (args[i + 1] == NULL) {      //no argument after < 
                 perror("mysh: redirection error: no input file\n");
                 return 1;
             }
@@ -330,7 +348,7 @@ int redirection(char **args) {
         }
         else if (strcmp(args[i], ">") == 0) {
             // Output redirection
-            if (args[i + 1] == NULL) {
+            if (args[i + 1] == NULL) {           //no argument after >
                 perror("mysh: redirection error: no output file\n");
                 return 1;
             }
