@@ -13,10 +13,19 @@
 // Forward declarations because I wrote the main function at the beginning and am too lazy to rearrange the order of the functions
 void tokenize(char *line, int mode);
 int command(char **args, int mode);
-void external_command(char **args);
 void redirection_and_piping(char **args);
+int redirection(char **args);
+void handle_single_command(char **args);
+void expand_wildcard(char **args);
+char* add_spaces(const char *str);
+int execute_conditional(char **args);
+
+int stat = 0; 
+
 
 int main(int argc, char *argv[]) {
+    int saved_stdin = dup(STDIN_FILENO);
+    int saved_stdout = dup(STDOUT_FILENO);
     char line[MAX_LINE + 1]; //explicitly need to make space for the null terminator so i added one more
     ssize_t num_read; //bytes read by read() later
 
@@ -82,6 +91,8 @@ int main(int argc, char *argv[]) {
         }
 
         tokenize(line, mode);
+        dup2(saved_stdin, STDIN_FILENO);
+        dup2(saved_stdout, STDOUT_FILENO);
     }
 
     //figure out how to not close terminal to avoid bugs
@@ -152,7 +163,8 @@ void tokenize(char *line, int mode) {
     int num = 0; 
 
 
-    line = add_spaces(line);
+//need to make code to check and add spaces before redirections and pipes
+ line = add_spaces(line);
 
 
 
@@ -172,41 +184,119 @@ void tokenize(char *line, int mode) {
     }
     split_line[num] = NULL; // Null-terminate the array (important for exec() functions)
 
+   
+    int i = 0;
+     if (split_line[0] != NULL) {
+        expand_wildcard(split_line);
 
-    if (split_line[0] != NULL) {
-       command(split_line, mode);
+        for (i = 0; split_line[i] != NULL; i++) {
+            if (strcmp(split_line[i], "|") == 0) {
+                redirection_and_piping(split_line);
+                return;//theres a pipe, so it was handled already
+            }
+    
+        }
+        redirection_and_piping(split_line);
+        command(split_line, mode);//there was only a redirection, so we need to still run command
+
+
     }
+    
+            
 }
+
+
+void expand_wildcard(char **args) {
+    int i = 0;
+    // Calculate the current size of args
+    int argc;
+    for (argc = 0; args[argc] != NULL; argc++);
+
+    while (args[i] != NULL) {
+        if (strchr(args[i], '*') != NULL) {
+            glob_t globbuf;
+            memset(&globbuf, 0, sizeof(globbuf));
+            // Use GLOB_NOCHECK to return the pattern if no matches are found
+            int result = glob(args[i], GLOB_NOCHECK, NULL, &globbuf);
+
+            if (result == 0 && globbuf.gl_pathc > 0) {
+                // Calculate the new size for args
+                int new_argc = argc - 1 + globbuf.gl_pathc; // Replace one arg with glob matches
+
+                // Reallocate args with the new size
+                //*args = (char **)realloc(*args, (new_argc + 1) * sizeof(char *)); // +1 for NULL terminator
+
+                // Shift the existing arguments to make space for the new glob results
+                memmove(&args[i + globbuf.gl_pathc], &(args[i + 1]), (argc - i) * sizeof(char *));
+
+                // Copy the glob results into args
+                for (size_t j = 0; j < globbuf.gl_pathc; j++) {
+                    args[i + j] = strdup(globbuf.gl_pathv[j]);
+                }
+
+                // Update counters according to the new size
+                argc = new_argc;
+                i += globbuf.gl_pathc; // Move past the newly added args
+            } else {
+                // If no matches found, just go to the next arg
+                i++;
+            }
+
+            globfree(&globbuf);
+        } else {
+            // No wildcard in the current arg, move to the next one
+            i++;
+        }
+    }
+
+    // Ensure args is NULL-terminated
+    args[argc] = NULL;
+}
+
 
 //cd    pwd     exit   which
 int command(char **args, int mode) {
-  /* if (args[0] == NULL) {
-         return 0; 
-    } */
-    //i changed this to be in the process line function 
+
+      if (args[0] != NULL && (strcmp(args[0], "then") == 0 || strcmp(args[0], "else") == 0)) {
+        if (!execute_conditional(args)) {
+            return stat; // Maintain the last command's status and skip execution
+        }
+        int i;
+        for (i = 0; args[i+1] != NULL; i++) {
+            args[i] = args[i+1];
+        }
+        args[i] = NULL; // Null-terminate the modified args array
+    }
+    
 
     if (strcmp(args[0], "cd") == 0) {
         if (args[1] == NULL) {
             perror("cd: no filename");
+            stat = 1;
         }
     
-    int s = chdir(args[1]);
+        int s = chdir(args[1]);
+        stat = 0;
 
         if (s != 0) {
-            perror("cd: such file or directory");
+            perror("cd: no such file or directory");
+            stat = 1;
         }
-
+        
         return 0;
 
     } else if (strcmp(args[0], "pwd") == 0) {
         char *dir = getcwd(NULL, 0); //gets the directory which we are in
+        stat = 0;
 
         if (dir != NULL) {
 
             printf("%s\n", dir);
+            
 
         } else {
             perror("pwd: could not get directory path");
+            stat = 1;
         }
 
         return 0;
@@ -226,6 +316,7 @@ int command(char **args, int mode) {
 
         char *token = strtok(path, ":");
          //printf("\ntoken path: %s", path);
+         stat = 0;
 
         if(token != NULL) {
 
@@ -239,14 +330,18 @@ int command(char **args, int mode) {
 
             printf("%s\n", fPath);
 
+
+
             return 0;
         }
 
             printf("Command not found\n"); //only comes here if the file is unaccessible or unexecutable
+            stat = 1;
 
         } else {
 
             printf("which: missing argument\n"); 
+            stat = 1;
 
         }
 
@@ -254,45 +349,191 @@ int command(char **args, int mode) {
 
     } else {
 
-        external_command(args);
+        handle_single_command(args);
 
     }
 
     return 0; 
 }
 
-void external_command(char **args) {
+void handle_single_command(char **args) {
+    pid_t pid = fork();
+    int childStatus;
 
-    pid_t pid; //id variable for forking
-    
-
-    int status = 0; //status when child ends or exits
-
-    pid = fork(); //child pid should be 0 and parent should be whatever is not 0
-    
-    if (pid == 0) {
-
-         //redirection_and_piping(args); this is where the redirection should go
+    if (pid == 0) { // Child Process
 
         if (execvp(args[0], args) == -1) {
-            perror("execvp: erorr during execvp functino");
-             exit(EXIT_FAILURE); 
+            perror("execvp");
+            exit(EXIT_FAILURE);
         }
-       
-    } else if (pid < 0) { // less than zero when child process was failed to get created
-        perror("forking error");
-    } else {
-        // Parent process waits for the child to complete
-        do {
-
-            waitpid(pid, &status, WUNTRACED);
-
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    } else if (pid < 0) {
+        perror("fork");
+        stat = 1;
+    } else { // Parent process
+        waitpid(pid, &childStatus, 0);
+        if (WIFEXITED(childStatus)) {  // Check if the child process exited normally
+            int exitStatus = WEXITSTATUS(childStatus); // Get the exit status of the child process
+            if(exitStatus == EXIT_SUCCESS) {
+                stat = 0;
+            } else {
+                stat = 1;
+            }
+        } else {
+            stat = 1; 
+        }
     }
 }
 
 void redirection_and_piping(char **args) {
    
+     int i, pipe_index = -1;
+
+    // Find pipe and redirection symbols, handle redirection
+    for (i = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], "|") == 0) {
+            pipe_index = i;
+            args[i] = NULL;  // Replace '|' with NULL
+        } else if (strcmp(args[i], "<") == 0 || strcmp(args[i], ">") == 0) {
+            if (redirection(args) != 0) {
+                return; 
+            }
+            i--; // Adjust index for removed elements 
+        }
+    }
+
+     if (pipe_index == -1) {
+        return; 
+    }
+
+
+         // Create a single pipe
+    int pipefd[2];
+    if (pipe(pipefd) < 0) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
+    }
+
+
+    // Fork the first process
+    pid_t pid1 = fork();
+    if (pid1 == 0) {  // First child process
+        close(pipefd[0]); // Close unused read end 
+        dup2(pipefd[1], STDOUT_FILENO); 
+        close(pipefd[1]);
+        execvp(args[0], args);
+        perror("execvp (first command)");
+        exit(EXIT_FAILURE);
+    }
+    else if (pid1 < 0) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+
+
+
+     // Fork the second process
+    pid_t pid2 = fork();
+    if (pid2 == 0) { // Second child process
+        close(pipefd[1]); // Close unused write end
+        dup2(pipefd[0], STDIN_FILENO);
+        close(pipefd[0]);
+        execvp(args[pipe_index + 1], args + pipe_index + 1);
+        perror("execvp (second command)");
+        exit(EXIT_FAILURE);
+    } else if (pid2 < 0) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+
+    close(pipefd[0]);
+    close(pipefd[1]);
+
+    wait(NULL);
+    wait(NULL);
+}
+
+
+
+int redirection(char **args) {
+    int i = 0;
+    while (args[i] != NULL) {
+        if (strcmp(args[i], "<") == 0) {
+            // Input redirection
+            if (args[i + 1] == NULL) {      //no argument after < 
+                perror("mysh: redirection error: no input file\n");
+                return 1;
+            }
+            int fd = open(args[i + 1], O_RDONLY);
+            if (fd == -1) {
+                perror("mysh: open (input)");
+                return 1;
+            }
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+
+
+       
+            
+        }
+        else if (strcmp(args[i], ">") == 0) {
+            // Output redirection
+            if (args[i + 1] == NULL) {           //no argument after >
+                perror("mysh: redirection error: no output file\n");
+                return 1;
+            }
+            int fd = open(args[i + 1], O_WRONLY | O_CREAT | O_TRUNC, 0640);
+            if (fd == -1) {
+                perror("mysh: open (output)");
+                return 1;
+            }
+            dup2(fd, STDOUT_FILENO);
+            close(fd); 
+        }
+        i++;
+    }
+
+    //remove redirection symbols and filename after redirection is complete.
+    i = 0;
+    int j = i;
+    while(args[i] != NULL)
+    {
+        if((strcmp(args[i], ">") == 0) || (strcmp(args[i], "<") == 0))
+        {
+            j++; // Skip the filename
+            while (args[j + 1] != NULL) {
+                args[j] = args[j + 1];
+                j++;
+            }
+            args[j] = NULL;  // New null terminator
+
+            // Additionally remove the redirection symbol itself
+            j=i;         // Decrement to go back to the position of the redirection symbol
+            while (args[j + 1] != NULL) {
+                args[j] = args[j + 1];
+                j++;
+            }
+            args[j] = NULL; // New null terminator 
+            i--;
+        }
+        i++;
+    }
+
+
+    
+    return 0; // Success
+}
+
+int execute_conditional(char **args) {
+    if (strcmp(args[0], "then") == 0) {
+        if (stat != 0) {
+            return 0; //last one succeeded so stat = 0
+        }
+    } else if (strcmp(args[0], "else") == 0) { //last one failed so stat = 1
+        if (stat == 0) {
+            return 0; 
+        }
+    }
+    return 1; // Indicate the command should be executed
 }
 
 
