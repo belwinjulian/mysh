@@ -206,12 +206,6 @@ void tokenize(char *line, int mode) {
 }
 
 
-
-  //  if (split_line[0] != NULL) {
-    //   command(split_line, mode);
-    //}
-
-
 void expand_wildcard(char **args) {
     int i = 0;
     // Calculate the current size of args
@@ -267,7 +261,6 @@ int command(char **args, int mode) {
         if (!execute_conditional(args)) {
             return stat; // Maintain the last command's status and skip execution
         }
-        // If the conditional command is to be executed, shift the args array to remove the conditional token
         int i;
         for (i = 0; args[i+1] != NULL; i++) {
             args[i] = args[i+1];
@@ -368,6 +361,7 @@ void handle_single_command(char **args) {
         }
     } else if (pid < 0) {
         perror("fork");
+        stat = 1;
     } else { // Parent process
         wait(NULL); 
 
