@@ -3,8 +3,7 @@ Soma Parvathini (svp98)
 
 
 # Project III: My Shell (mysh)
-This command-line spell checker helps ensure the accuracy of your text files by cross-referencing them with a word dictionary. It can process single files or scan entire directories (including subdirectories). When it finds a misspelling, it reports the file, line number, column number, and the incorrect word.
-
+A simple command-line shell we designed for the CS 214 course project which should simulate the capability to interpret and execute commands like bash or zsh. The shell we created should be capable of supporting both interactive and batch modes.
 #Test Cases
 
 Test Case 1: Interactive and Batch Mode
@@ -14,7 +13,7 @@ Expected Output: When the text file was inputted, there should be no "mysh>" or 
 
 Test Case 2: Built-in functions
 
-Input: We tested cd, pwd, and which to make sure they worked properly.
+Input: We tested cd, pwd, exit and which to make sure they worked properly. 
 Expected Output: depending on which built-in function we used, it should have outputted the correct result. cd changed directory. pwd shows the directory you are in. which finds the path of an executable.
 
 Test Case 3: External Functions
@@ -44,10 +43,10 @@ Expected Output: All the possible values which have the characters beginning and
 
 
 # Features
-- **Interactive and Batch Modes**: Detects mode using `isatty()` and adjusts behavior for command input accordingly. <br>
-- **Command Execution**: Executes external programs, handles built-in commands (`cd`, `pwd`, `which`, `exit`), and processes wildcards for file names. <br>
-- **Redirection and Pipelines**: Implements `<` and `>` for I/O redirection and `|` for connecting two processes. <br>
-- **Wildcards**: Handles single asterisk patterns in file names for expansion. <br>
+- **Interactive and Batch Modes**: Detects mode using `isatty()` function. Interactive mode allows user to interact with the interface by typing. Batch mode takes input from text files. <br>
+- **Command Execution**: Executes external programs and commands, should be able to handle built-in commands such as `cd`, `pwd`, `which`, `exit`, and processes wildcards to get every file with names that have letter before and after '*'. <br>
+- **Redirection and Pipelines**: Using `<` and `>` for I/O redirection and `|` for connecting two processes (output to input). <br>
+- **Wildcards**: Handles single asterisk patterns in file names for expansion before and after asterisk. <br>
 - **Conditional Execution**: Allows for conditional command execution based on the success or failure of previous commands. <br>
   
 ## Usage
