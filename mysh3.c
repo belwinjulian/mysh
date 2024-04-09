@@ -158,6 +158,7 @@ void tokenize(char *line, int mode) {
 
 
 //need to make code to check and add spaces before redirections and pipes
+ line = add_spaces(line);
 
 
 
