@@ -93,10 +93,64 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
-//foo bar < baz
-//foo bar<baz
-//should both be both same
-//figure out how to account for redirection and piping having no spaces
+char* add_spaces(const char *str) {
+
+    if(str == NULL) {
+        return NULL;
+    }
+
+    int nSize = 1;
+    int x = 0;
+
+    while(str[x] != '\0') {
+
+        if(str[x] == '>' || str[x] == '<' || str[x] == '|') {
+
+            if(x > 0 && str[x-1] != ' ') {
+                nSize++;
+            }
+
+            if(str[x+1] != '\0' && str[x+1] != ' ') {
+                nSize++;
+            }
+        }
+        nSize++;
+        x++;
+    }
+
+    char* nStr = (char*)malloc(nSize);
+
+    if(nStr == NULL) {
+        return NULL;
+    }
+
+    
+    int i = 0;
+    int j = 0; 
+
+    while(str[i] != '\0') {
+        
+        if ((str[i] == '>' || str[i] == '<' || str[i] == '|') && i > 0 && str[i-1] != ' ') {
+            nStr[j] = ' ';
+            j++;
+        }
+        
+        nStr[j] = str[i];
+        j++;
+
+      
+        if ((str[i] == '>' || str[i] == '<' || str[i] == '|') && str[i+1] != '\0' && str[i+1] != ' ') {
+            nStr[j] = ' ';
+            j++;
+        }
+        i++;
+    }
+
+    nStr[j] = '\0';
+
+    return nStr;
+}
+
 void tokenize(char *line, int mode) {
 
     char *split_line[MAX_ARGS]; //line split up into a bunch of tokens
