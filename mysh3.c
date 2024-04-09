@@ -16,6 +16,12 @@ int command(char **args, int mode);
 void redirection_and_piping(char **args);
 int redirection(char **args);
 void handle_single_command(char **args);
+void expand_wildcard(char **args);
+char* add_spaces(const char *str);
+int execute_conditional(char **args);
+
+int stat = 0; 
+
 
 int main(int argc, char *argv[]) {
     int saved_stdin = dup(STDIN_FILENO);
@@ -181,7 +187,7 @@ void tokenize(char *line, int mode) {
    
     int i = 0;
      if (split_line[0] != NULL) {
-
+        expand_wildcard(split_line);
 
         for (i = 0; split_line[i] != NULL; i++) {
             if (strcmp(split_line[i], "|") == 0) {
@@ -206,26 +212,81 @@ void tokenize(char *line, int mode) {
     //}
 
 
+void expand_wildcard(char **args) {
+    int i = 0;
+    // Calculate the current size of args
+    int argc;
+    for (argc = 0; args[argc] != NULL; argc++);
+
+    while (args[i] != NULL) {
+        if (strchr(args[i], '*') != NULL) {
+            glob_t globbuf;
+            memset(&globbuf, 0, sizeof(globbuf));
+            // Use GLOB_NOCHECK to return the pattern if no matches are found
+            int result = glob(args[i], GLOB_NOCHECK, NULL, &globbuf);
+
+            if (result == 0 && globbuf.gl_pathc > 0) {
+                // Calculate the new size for args
+                int new_argc = argc - 1 + globbuf.gl_pathc; // Replace one arg with glob matches
+
+                // Reallocate args with the new size
+                //*args = (char **)realloc(*args, (new_argc + 1) * sizeof(char *)); // +1 for NULL terminator
+
+                // Shift the existing arguments to make space for the new glob results
+                memmove(&args[i + globbuf.gl_pathc], &(args[i + 1]), (argc - i) * sizeof(char *));
+
+                // Copy the glob results into args
+                for (size_t j = 0; j < globbuf.gl_pathc; j++) {
+                    args[i + j] = strdup(globbuf.gl_pathv[j]);
+                }
+
+                // Update counters according to the new size
+                argc = new_argc;
+                i += globbuf.gl_pathc; // Move past the newly added args
+            } else {
+                // If no matches found, just go to the next arg
+                i++;
+            }
+
+            globfree(&globbuf);
+        } else {
+            // No wildcard in the current arg, move to the next one
+            i++;
+        }
+    }
+
+    // Ensure args is NULL-terminated
+    args[argc] = NULL;
+}
+
 
 //cd    pwd     exit   which
 int command(char **args, int mode) {
-  /* if (args[0] == NULL) {
-         return 0; 
-    } */
-    //i changed this to be in the process line function 
-    
-    //handle redirection, and piping
+
+      if (args[0] != NULL && (strcmp(args[0], "then") == 0 || strcmp(args[0], "else") == 0)) {
+        if (!execute_conditional(args)) {
+            return stat; // Maintain the last command's status and skip execution
+        }
+        // If the conditional command is to be executed, shift the args array to remove the conditional token
+        int i;
+        for (i = 0; args[i+1] != NULL; i++) {
+            args[i] = args[i+1];
+        }
+        args[i] = NULL; // Null-terminate the modified args array
+    }
     
 
     if (strcmp(args[0], "cd") == 0) {
         if (args[1] == NULL) {
             perror("cd: no filename");
+            stat = 1;
         }
     
     int s = chdir(args[1]);
 
         if (s != 0) {
             perror("cd: such file or directory");
+            stat = 1;
         }
 
         return 0;
@@ -239,6 +300,7 @@ int command(char **args, int mode) {
 
         } else {
             perror("pwd: could not get directory path");
+            stat = 1;
         }
 
         return 0;
@@ -275,6 +337,7 @@ int command(char **args, int mode) {
         }
 
             printf("Command not found\n"); //only comes here if the file is unaccessible or unexecutable
+            stat = 1;
 
         } else {
 
@@ -282,7 +345,7 @@ int command(char **args, int mode) {
 
         }
 
-        return 0;
+        return stat;
 
     } else {
 
@@ -299,6 +362,7 @@ void handle_single_command(char **args) {
     if (pid == 0) { // Child Process
 
         if (execvp(args[0], args) == -1) {
+            stat = 1;
             perror("execvp");
             exit(EXIT_FAILURE);
         }
@@ -448,6 +512,19 @@ int redirection(char **args) {
 
     
     return 0; // Success
+}
+
+int execute_conditional(char **args) {
+    if (strcmp(args[0], "then") == 0) {
+        if (stat != 0) {
+            return 0; // Skip this command because the last one failed
+        }
+    } else if (strcmp(args[0], "else") == 0) {
+        if (stat == 0) {
+            return 0; // Skip this command because the last one succeeded
+        }
+    }
+    return 1; // Indicate the command should be executed
 }
 
 
